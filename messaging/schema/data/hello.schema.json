@@ -1,0 +1,25 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://hackersdobem.sti.usp.br/vumos/schema/hello.schema.json",
+  "title": "Vumos Project Hello Message Data",
+  "description": "Data for a hello message in the Vumos protocol",
+  "type": "object",
+  "properties": {
+    "name": {
+      "description": "The common name of the sender",
+      "type": "string"
+    },
+    "description": {
+      "description": "A description of the sender",
+      "type": "string"
+    },
+    "status_expiry": {
+      "description": "Seconds before status is considered expired for the service (only valid for services)",
+      "type": "number"
+    }
+  },
+  "required": [
+    "name",
+    "description"
+  ]
+}

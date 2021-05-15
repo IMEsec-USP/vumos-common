@@ -1,0 +1,52 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://hackersdobem.sti.usp.br/vumos/schema/change.schema.json",
+  "title": "Vumos Project Configuration Change Message",
+  "description": "A message for relaying configuration changes in the Vumos protocol",
+  "type": "object",
+  "properties": {
+    "configurations": {
+      "description": "List of configurations",
+      "type": "array",
+      "items": {
+        "description": "A parameter",
+        "type": "object",
+        "properties": {
+          "key": {
+            "description": "A computer-friendly configuration identifier string",
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*$"
+          },
+          "value": {
+            "description": "The current and default value for the parameter",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "boolean"
+              }
+            ],
+            "required": [
+              "type",
+              "current"
+            ]
+          }
+        },
+        "required": [
+          "key",
+          "value"
+        ]
+      }
+    }
+  },
+  "required": [
+    "configurations"
+  ]
+}

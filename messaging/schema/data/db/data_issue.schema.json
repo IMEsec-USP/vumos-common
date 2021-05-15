@@ -1,0 +1,32 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "$id": "https://hackersdobem.sti.usp.br/vumos/schema/data/db/data_issue.schema.json",
+    "title": "Vumos Project Issue Data Message",
+    "description": "A message for issue data in the Vumos protocol",
+    "type": "object",
+    "properties": {
+        "ip_address": {
+            "description": "Target IP address",
+            "type": "string"
+        },
+        "port": {
+            "description": "Service port",
+            "type": "integer"
+        },
+        "name": {
+            "description": "Issue name",
+            "type": "string"
+        },
+        "version": {
+            "description": "Issue version string",
+            "type": "string"
+        },
+        "extra": {
+            "description": "Extra data associated with the host",
+            "type": "object"
+        }
+    },
+    "required": [
+        "configurations"
+    ]
+}

@@ -1,0 +1,90 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "$id": "https://hackersdobem.sti.usp.br/vumos/schema/hello.schema.json",
+    "title": "Vumos Project Data Operation Message Data",
+    "description": "Data for a data operation message in the Vumos protocol",
+    "type": "object",
+    "properties": {
+        "operation": {
+            "description": "The type of operation to be performed",
+            "type": "string",
+            "enum": [
+                "put",
+                "del",
+                "get"
+            ]
+        },
+        "type": {
+            "description": "The type to be affected by the operation",
+            "type": "string",
+            "enum": [
+                "host",
+                "machine",
+                "vulnerability",
+                "path"
+            ]
+        }
+    },
+    "allOf": [
+        {
+            "if": {
+                "properties": {
+                    "operation": {
+                        "const": "put"
+                    }
+                }
+            },
+            "then": {
+                "properties": {
+                    "values": {
+                        "type": "object"
+                    }
+                }
+            }
+        },
+        {
+            "if": {
+                "properties": {
+                    "operation": {
+                        "const": "get"
+                    }
+                }
+            },
+            "then": {
+                "properties": {
+                    "fields": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "pattern": "^[a-zA-Z][a-zA-Z0-9_]$"
+                        }
+                    }
+                }
+            }
+        }
+    ],
+    "oneOf": [
+        {
+            "properties": {
+                "id": {
+                    "description": "Used for querying by object ID. It is syntatic sugar for id = 'id'",
+                    "type": "string",
+                    "pattern": "^[a-zA-Z0-9\\-]{5,}$"
+                }
+            }
+        },
+        {
+            "properties": {
+                "filter": {
+                    "description": "Used for querying by expression. Should be a simple expression, and not perform subqueries.",
+                    "type": "string",
+                    "pattern": "^[^()]$"
+                }
+            }
+        }
+    ],
+    "required": [
+        "operation",
+        "type"
+    ]
+}

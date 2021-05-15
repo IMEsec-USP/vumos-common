@@ -1,0 +1,116 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://hackersdobem.sti.usp.br/schema/vumos/message.schema.json",
+  "title": "VumosMessage",
+  "description": "A schema for Vumos Framework messages",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string"
+    },
+    "source": {
+      "type": "string",
+      "enum": [
+        "service",
+        "manager"
+      ]
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "request",
+        "response"
+      ]
+    },
+    "mode": {
+      "type": "string",
+      "enum": [
+        "broadcast",
+        "targeted"
+      ]
+    },
+    "message": {
+      "type": "string",
+      "description": "Type of the message being sent"
+    },
+    "processed": {
+      "type": "array",
+      "description": "List of modules this message has been processed by",
+      "items": {
+        "type": "object",
+        "properties": {
+          "module": {
+            "type": "string",
+            "description": "Module ID"
+          },
+          "hash": {
+            "type": "string",
+            "description": "Data hash on output"
+          },
+          "timestamp": {
+            "type": "string",
+            "description": "ISO timestamp when message was sent"
+          }
+        }
+      }
+    }
+  },
+  "anyOf": [
+    {
+      "properties": {
+        "message": {
+          "const": "hello",
+          "data": {
+            "$ref": "data/hello.schema.json#/definitions/ExternalType"
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "message": {
+          "const": "status_update"
+        },
+        "data": {
+          "$ref": "data/status_update.schema.json#/definitions/ExternalType"
+        }
+      }
+    },
+    {
+      "properties": {
+        "message": {
+          "const": "configuration_changed"
+        },
+        "data": {
+          "$ref": "data/configuration_changed.schema.json#/definitions/ExternalType"
+        }
+      }
+    },
+    {
+      "properties": {
+        "message": {
+          "const": "configuration_change"
+        },
+        "data": {
+          "$ref": "data/configuration_change.schema.json#/definitions/ExternalType"
+        }
+      }
+    },
+    {
+      "properties": {
+        "message": {
+          "const": "data.operation"
+        },
+        "data": {
+          "$ref": "data/data.operation.schema.json#/definitions/ExternalType"
+        }
+      }
+    }
+  ],
+  "required": [
+    "id",
+    "source",
+    "mode",
+    "message"
+  ]
+}

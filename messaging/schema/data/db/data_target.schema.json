@@ -1,0 +1,28 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "$id": "https://hackersdobem.sti.usp.br/vumos/schema/data/db/data_target.schema.json",
+    "title": "Vumos Project Target Data Message",
+    "description": "A message for target data in the Vumos protocol",
+    "type": "object",
+    "properties": {
+        "ip_address": {
+            "description": "Target IP address",
+            "type": "string"
+        },
+        "domains": {
+            "description": "List of domains associated to the host",
+            "type": "array",
+            "items": {
+                "description": "One of the domains",
+                "type": "string"
+            }
+        },
+        "extra": {
+            "description": "Extra data associated with the host",
+            "type": "object"
+        }
+    },
+    "required": [
+        "configurations"
+    ]
+}

@@ -1,0 +1,113 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://hackersdobem.sti.usp.br/vumos/schema/changed.schema.json",
+  "title": "Vumos Project Configuration Changed Message",
+  "description": "A message for relaying that configuration changed for a service",
+  "type": "object",
+  "properties": {
+    "configurations": {
+      "description": "List of configurations",
+      "type": "array",
+      "items": {
+        "description": "A parameter",
+        "type": "object",
+        "properties": {
+          "name": {
+            "description": "The common name for the parameter",
+            "type": "string"
+          },
+          "description": {
+            "description": "A description for the parameter",
+            "type": "string"
+          },
+          "key": {
+            "description": "A computer-friendly configuration identifier string",
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*$"
+          },
+          "value": {
+            "description": "The current and default value for the parameter",
+            "type": "object",
+            "anyOf": [
+              {
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "const": "string"
+                  },
+                  "current": {
+                    "descripton": "The current string parameter value",
+                    "type": "string"
+                  },
+                  "default": {
+                    "description": "The default string parameter value",
+                    "type": "string"
+                  }
+                }
+              },
+              {
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "const": "number"
+                  },
+                  "current": {
+                    "descripton": "The current number parameter value",
+                    "type": "number"
+                  },
+                  "default": {
+                    "description": "The default nubmer parameter value",
+                    "type": "number"
+                  }
+                }
+              },
+              {
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "const": "integer"
+                  },
+                  "current": {
+                    "descripton": "The current integer parameter value",
+                    "type": "integer"
+                  },
+                  "default": {
+                    "description": "The default integer parameter value",
+                    "type": "integer"
+                  }
+                }
+              },
+              {
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "const": "boolean"
+                  },
+                  "current": {
+                    "descripton": "The current boolean parameter value",
+                    "type": "boolean"
+                  },
+                  "default": {
+                    "description": "The default nubmer parameter value",
+                    "type": "boolean"
+                  }
+                }
+              }
+            ],
+            "required": [
+              "type",
+              "current"
+            ]
+          }
+        },
+        "required": [
+          "key",
+          "value"
+        ]
+      }
+    }
+  },
+  "required": [
+    "configurations"
+  ]
+}
