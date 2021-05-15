@@ -3,7 +3,7 @@ from array import array
 import hashlib
 import asyncio
 from asyncio.events import AbstractEventLoop
-from commons.messaging.message import VumosMessage, VumosMessageProcessed
+from common.messaging.message import VumosMessage, VumosMessageProcessed
 from nats.aio.client import Client as NATS
 import sched
 import json

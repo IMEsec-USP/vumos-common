@@ -2,8 +2,7 @@
 
 import json
 from typing import Dict, List
-from commons.messaging.vumos.vumos import VumosService
-from jsonschema.validators import Draft7Validator
+from common.messaging.vumos.vumos import VumosService
 
 
 class VumosDataEntryType:

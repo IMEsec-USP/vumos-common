@@ -1,15 +1,11 @@
 
 
-from jsonschema.validators import Draft7Validator
-
-
 class MessagingSchemaManager:
     def __init__(self) -> None:
         pass
 
-    def hello_schema(self) -> Draft7Validator:
-        Draft7Validator()
+    def hello_schema(self) -> None:
         pass
 
-    def cchange_schema(self) -> Draft7Validator:
+    def cchange_schema(self) -> None:
         pass
