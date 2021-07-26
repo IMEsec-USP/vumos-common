@@ -3,6 +3,7 @@ from array import array
 import hashlib
 import asyncio
 from asyncio.events import AbstractEventLoop
+import threading
 from common.messaging.message import VumosMessage, VumosMessageProcessed
 from nats.aio.client import Client as NATS
 import sched
@@ -91,7 +92,7 @@ class VumosService:
         '''
         return self.config[key]
 
-    async def connect(self, loop: AbstractEventLoop, uri="nats://127.0.0.1:4222") -> None:
+    async def connect(self, loop: AbstractEventLoop, uri=os.getenv("NATS_URI", "nats://127.0.0.1:4222")) -> None:
         '''
         This method connects the service to the NATS messaging service, sets up subscriptions, and sends the HELLO message.
 
@@ -111,26 +112,29 @@ class VumosService:
 
         # Send Hello
         await self._send_hello()
+        await self._send_cchanged()
 
-    async def loop(self) -> None:
+    def loop(self) -> None:
         '''
         This method starts listening for messages and sending status updates to the backbone.
         '''
-        tasks: List[asyncio.Task] = []
 
         # Status update loop
-        async def status_update_loop():
+        def status_update_loop():
+            loop = asyncio.new_event_loop()
             while self.running:
-                await self._send_status()
-                await asyncio.sleep(0.75 * self.status_expiry)
+                loop.run_until_complete(self._send_status())
+                time.sleep(0.75 * self.status_expiry)
 
-        tasks.append(asyncio.Task(status_update_loop()))
+        status_update = threading.Thread(target=status_update_loop)
+        status_update.setDaemon(True)
+        status_update.start()
 
         # Wait for all threads
-        for task in tasks:
-            await task
+        status_update.join()
 
     # Listen for message callbacks
+
     async def _message_callback(self, msg) -> None:
         '''
         This method handles an incoming message from the network.
@@ -278,7 +282,6 @@ class VumosService:
         }, to=to)
 
     async def _send_status(self, to: str = None) -> None:
-        print('Sent status_update')
         await self.send_message("status_update", {
             "code": self.status.code,
             "message": self.status.message

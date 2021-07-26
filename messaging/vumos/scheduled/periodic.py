@@ -1,5 +1,7 @@
 
 import asyncio
+import threading
+import time
 from typing import Any, Callable, List
 from ..vumos import VumosService, VumosServiceStatus, VumosParameter
 
@@ -15,15 +17,15 @@ class ScheduledVumosService(VumosService):
         self.set_status(VumosServiceStatus(
             "idle", f"[IDLE] Service <{self.name}> is idle"))
 
-    async def loop(self) -> None:
-        async def run_scheduled():
+    def loop(self) -> None:
+        def run_scheduled():
             while self.running:
                 condition = self.conditions(self)
                 if not (condition is None):
                     self.set_status(VumosServiceStatus(
                         "running", f"[RUNNING] <{self.name}> service is running"))
                     try:
-                        await self.task(self, condition)
+                        self.task(self, condition)
                     except Exception as e:
                         print(e)
 
@@ -31,10 +33,14 @@ class ScheduledVumosService(VumosService):
                         "idle", f"[IDLE] Service <{self.name}> is idle"))
 
                 # Check conditions every hour
-                await asyncio.sleep(self.pool_interval)
+                time.sleep(self.pool_interval)
 
-        task = asyncio.Task(run_scheduled())
+        # Schedule thread creation
+        schedule = threading.Thread(target=run_scheduled)
+        schedule.setDaemon(True)
+        schedule.start()
 
-        await super().loop()
+        # Start
+        super().loop()
 
-        await task
+        schedule.join()
