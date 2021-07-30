@@ -3,6 +3,7 @@ from array import array
 import hashlib
 import asyncio
 from asyncio.events import AbstractEventLoop
+from multiprocessing import connection
 import threading
 from common.messaging.message import VumosMessage, VumosMessageProcessed
 from nats.aio.client import Client as NATS
@@ -48,8 +49,7 @@ class VumosParameter(TypedDict):
 
 class VumosService:
     def __init__(self, name: str, description: str, parameters: List[VumosParameter] = [], nats_callback: Callable[[VumosService, VumosMessage], None] = None, status_expiry: float = 60) -> None:
-        self.directed_queue = str(uuid.uuid4())
-        self.id = os.environ.get('VUMOS_ID') or socket.gethostname()
+        self.id = os.environ.get('VUMOS_ID') or str(uuid.uuid4())
         self.scheduler = sched.scheduler(time.time, time.sleep)
         self.running = True
 
@@ -78,6 +78,7 @@ class VumosService:
         Parameters:
             status (VumosServiceStatus): The current status of this service
         '''
+        print(f"Status set to: {status.message}")
         self.status = status
 
     def get_config(self, key: str) -> Any:
@@ -104,34 +105,30 @@ class VumosService:
         await self.nats.connect(uri, loop=loop)
 
         # Listen for messages
+
         async def handler(msg):
             await self._message_callback(msg)
 
         await self.nats.subscribe(broadcast_subject, cb=handler)
-        await self.nats.subscribe(self.directed_queue, cb=handler)
+        await self.nats.subscribe(self.id, cb=handler)
 
         # Send Hello
         await self._send_hello()
         await self._send_cchanged()
 
-    def loop(self) -> None:
+    def loop(self, loop) -> None:
         '''
         This method starts listening for messages and sending status updates to the backbone.
         '''
 
         # Status update loop
-        def status_update_loop():
-            loop = asyncio.new_event_loop()
+        async def status_update_loop():
             while self.running:
-                loop.run_until_complete(self._send_status())
-                time.sleep(0.75 * self.status_expiry)
+                await self._send_status()
+                await asyncio.sleep(0.75 * self.status_expiry)
 
-        status_update = threading.Thread(target=status_update_loop)
-        status_update.setDaemon(True)
-        status_update.start()
-
-        # Wait for all threads
-        status_update.join()
+        scheduled = loop.create_task(status_update_loop())
+        loop.run_until_complete(scheduled)
 
     # Listen for message callbacks
 
@@ -155,7 +152,12 @@ class VumosService:
             if processed["hash"] == hash and processed["module"] == self.id:
                 return
 
-        #print('recv:', message)
+        # Ignore message if from this or other service
+        if m_id == self.id or m_source == 'service':
+            return
+
+        print("========== Receive ==========")
+        print(json.dumps(message, indent=2))
 
         if m_type == "hello":
             # On hello message
@@ -177,6 +179,12 @@ class VumosService:
             # directed: Don't do anything
             #
             # always: Send current configuration to managers
+            type_converters = {
+                'string': str,
+                'integer': int,
+                'float': float
+            }
+
             for config in m_data['configurations']:
                 c_key = config['key']
                 c_value = config['value']['current']
@@ -185,7 +193,13 @@ class VumosService:
                     print(f'Ignoring unknown config {c_key}')
                     continue
 
-                self.config[c_key] = c_value
+                try:
+                    self.config[c_key] = type_converters[config['value']['type']](
+                        c_value)
+                except Exception as e:
+                    print(
+                        f"Failed to convert value '{c_value}' [{type(c_value)}] to type {config['value']['type']}")
+                    print(e)
 
             await self._send_cchanged()
         elif m_type == "status_update":
@@ -227,6 +241,9 @@ class VumosService:
             "processed": new_processed,
             "data": data
         }
+
+        print("========== Sending ==========")
+        print(json.dumps(message, indent=2))
 
         subject = to or broadcast_subject
         payload = json.dumps(message).encode('utf-8')
