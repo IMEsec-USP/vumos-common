@@ -3,15 +3,14 @@ from array import array
 import hashlib
 import asyncio
 from asyncio.events import AbstractEventLoop
-from multiprocessing import connection
-import threading
+from sqlite3.dbapi2 import Error
 from common.messaging.message import VumosMessage, VumosMessageProcessed
 from nats.aio.client import Client as NATS
 import sched
 import json
 import time
 from typing import Callable, List, TypedDict, Any
-import socket
+import sqlite3
 import uuid
 from datetime import datetime
 import os
@@ -48,11 +47,43 @@ class VumosParameter(TypedDict):
 
 
 class VumosService:
-    def __init__(self, name: str, description: str, parameters: List[VumosParameter] = [], nats_callback: Callable[[VumosService, VumosMessage], None] = None, status_expiry: float = 60) -> None:
+    def __init__(self, name: str, description: str, parameters: List[VumosParameter] = [], nats_callback: Callable[[VumosService, VumosMessage], None] = None, status_expiry: float = 60, database_file='persistent/vumos-service.db') -> None:
         self.id = os.environ.get('VUMOS_ID') or str(uuid.uuid4())
         self.scheduler = sched.scheduler(time.time, time.sleep)
         self.running = True
 
+        ######################
+        ## Sets up database ##
+        ######################
+        self.database = sqlite3.connect(database_file)
+
+        # Creates configuration table and load stored values
+        self.database.execute('''
+        CREATE TABLE IF NOT EXISTS configuration (
+            key TEXT PRIMARY KEY,
+            value TEXT
+        )''')
+
+        valid_keys = list(map(lambda p: p['key'], parameters))
+
+        for key, value in self.database.execute('SELECT key, value FROM configuration'):
+            if not key in valid_keys:
+                self.database.execute(
+                    'DELETE FROM configuration WHERE key = ?', (key,))
+
+        self.database.commit()
+
+        for config in parameters:
+            key = config["key"]
+            default = config["value"]["default"]
+            try:
+                self.get_config(key)
+            except Error:
+                self.set_config(key, default)
+
+        #############################
+        ## Sets up node parameters ##
+        #############################
         self.name = name
         self.description = description
         self.parameters = parameters
@@ -62,14 +93,6 @@ class VumosService:
 
         self.set_status(VumosServiceStatus(
             "red", f"[ERROR] Service still has no status set"))
-
-        # Initialize config from parameters
-        config = {}
-
-        for parameter in self.parameters:
-            config[parameter["key"]] = parameter["value"]["default"]
-
-        self.config = config
 
     def set_status(self, status: VumosServiceStatus):
         '''
@@ -81,6 +104,23 @@ class VumosService:
         print(f"Status set to: {status.message}")
         self.status = status
 
+    def set_config(self, key: str, value: Any) -> Any:
+        '''
+        This function sets the current value of the configuration of a given key for this service.
+
+        Parameters:
+            key   (str): The key of the configuration
+            value (any): The value of the configuration
+
+        Returns:
+            Any: The value of the configuration
+        '''
+        self.database.execute(
+            'REPLACE INTO configuration VALUES (?, ?)', (key, json.dumps(value)))
+        self.database.commit()
+
+        return value
+
     def get_config(self, key: str) -> Any:
         '''
         This function returns the current value of the configuration of a given key for this service.
@@ -91,7 +131,10 @@ class VumosService:
         Returns:
             Any: The value set by the manager or default configuration
         '''
-        return self.config[key]
+        for (value,) in self.database.execute('SELECT value FROM configuration WHERE key = ?', (key,)):
+            return json.loads(value)
+
+        raise Error("Configuration does not exist")
 
     async def connect(self, loop: AbstractEventLoop, uri=os.getenv("NATS_URI", "nats://127.0.0.1:4222")) -> None:
         '''
@@ -189,13 +232,15 @@ class VumosService:
                 c_key = config['key']
                 c_value = config['value']['current']
 
-                if not c_key in self.config:
+                try:
+                    self.get_config(c_key)
+                except Error:
                     print(f'Ignoring unknown config {c_key}')
                     continue
 
                 try:
-                    self.config[c_key] = type_converters[config['value']['type']](
-                        c_value)
+                    self.set_config(
+                        c_key, type_converters[config['value']['type']](c_value))
                 except Exception as e:
                     print(
                         f"Failed to convert value '{c_value}' [{type(c_value)}] to type {config['value']['type']}")
