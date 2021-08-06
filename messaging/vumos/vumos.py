@@ -9,9 +9,10 @@ from nats.aio.client import Client as NATS
 import sched
 import json
 import time
-from typing import Callable, List, TypedDict, Any
+from typing import Callable, Coroutine, List, TypedDict, Any
 import sqlite3
 import uuid
+import re
 from datetime import datetime
 import os
 from enum import Enum
@@ -46,11 +47,32 @@ class VumosParameter(TypedDict):
     value: VumosParameterValue
 
 
+class VumosAction(TypedDict):
+    name: str
+    description: str
+    key: str
+    arguments: List[VumosParameter]
+
+
 class VumosService:
-    def __init__(self, name: str, description: str, parameters: List[VumosParameter] = [], nats_callback: Callable[[VumosService, VumosMessage], None] = None, status_expiry: float = 60, database_file='persistent/vumos-service.db') -> None:
+    def __init__(self,
+                 name: str, description: str,
+                 parameters: List[VumosParameter] = [],
+                 actions: List[VumosAction] = [],
+                 nats_callback: Callable[[
+                     VumosService, VumosMessage], None] = None,
+                 status_expiry: float = 60,
+                 database_file='persistent/vumos-service.db') -> None:
+        self.data_mtype_regex = re.compile(r'data_([a-z]+)')
+
         self.id = os.environ.get('VUMOS_ID') or str(uuid.uuid4())
         self.scheduler = sched.scheduler(time.time, time.sleep)
         self.running = True
+
+        self.actions = actions
+
+        self.handlers = []
+        self.action_handlers = {}
 
         ######################
         ## Sets up database ##
@@ -136,6 +158,26 @@ class VumosService:
 
         raise Error("Configuration does not exist")
 
+    def on_action(self, key: str, handler: Callable[[VumosService, List[VumosParameter]], Coroutine] = None):
+        '''
+        This function adds an action handler to the service.
+
+        Parameters:
+            key (str): The key of the action
+            handler (callable): A handler function. It will be called with a service and parameters arguments
+        '''
+        self.action_handlers[key] = handler
+
+    def on(self, filter: Callable[[VumosMessage], bool], handler: Callable[[VumosService, VumosMessage], Coroutine] = None):
+        '''
+        This function adds a data handler to the service.
+
+        Parameters:
+            filter (callable): A filter function, checks if the message should or not be processed by the handler
+            handler (callable): A handler function. It will be called with a service and message arguments
+        '''
+        self.handlers.append((filter, handler))
+
     async def connect(self, loop: AbstractEventLoop, uri=os.getenv("NATS_URI", "nats://127.0.0.1:4222")) -> None:
         '''
         This method connects the service to the NATS messaging service, sets up subscriptions, and sends the HELLO message.
@@ -201,6 +243,11 @@ class VumosService:
 
         print("========== Receive ==========")
         print(json.dumps(message, indent=2))
+        type_converters = {
+            'string': str,
+            'integer': int,
+            'float': float
+        }
 
         if m_type == "hello":
             # On hello message
@@ -215,43 +262,70 @@ class VumosService:
             if m_source == "manager":
                 await self._send_status(msg.reply)
                 await self._send_cchanged(msg.reply)
+
         elif m_type == "configuration_change":
-            # On change message
+            # On configuration change message
             #
-            # broadcast: Reply directly
-            # directed: Don't do anything
+            # broadcast: Don't do anything
+            # directed: Set configuration changes
             #
             # always: Send current configuration to managers
-            type_converters = {
-                'string': str,
-                'integer': int,
-                'float': float
-            }
 
-            for config in m_data['configurations']:
-                c_key = config['key']
-                c_value = config['value']['current']
+            if m_mode == "targeted":
+                for config in m_data['configurations']:
+                    c_key = config['key']
+                    c_value = config['value']['current']
 
-                try:
-                    self.get_config(c_key)
-                except Error:
-                    print(f'Ignoring unknown config {c_key}')
-                    continue
+                    try:
+                        self.get_config(c_key)
+                    except Error:
+                        print(f'Ignoring unknown config {c_key}')
+                        continue
 
-                try:
-                    self.set_config(
-                        c_key, type_converters[config['value']['type']](c_value))
-                except Exception as e:
-                    print(
-                        f"Failed to convert value '{c_value}' [{type(c_value)}] to type {config['value']['type']}")
-                    print(e)
+                    try:
+                        self.set_config(
+                            c_key, type_converters[config['value']['type']](c_value))
+                    except Exception as e:
+                        print(
+                            f"Failed to convert value '{c_value}' [{type(c_value)}] to type {config['value']['type']}")
+                        print(e)
 
-            await self._send_cchanged()
+                await self._send_cchanged()
+        elif m_type == "execute_action":
+            # On execute action message
+            #
+            # broadcast: Don't do anything
+            # directed: Execute action
+
+            # Parse action arguments
+            arguments = {}
+
+            for argument in m_data['arguments']:
+                c_key = argument['key']
+                c_value = argument['value']['current']
+
+                arguments[c_key] = type_converters[argument['value']
+                                                   ['type']](c_value)
+
+            # Run handler
+            action_handler = self.action_handlers[m_data['key']]
+
+            if action_handler:
+                await action_handler(self, arguments)
+
         elif m_type == "status_update":
             # On status update, do nothing
             pass
         elif self.nats_callback:
             self.nats_callback(self, message)
+
+        # Run handlers for this message
+        data_match = self.data_mtype_regex.fullmatch(m_type)
+
+        if data_match:
+            for filter, handler in self.handlers:
+                if filter(message):
+                    await handler(self, message)
 
     ###########################
     # Message sending methods #
@@ -340,7 +414,8 @@ class VumosService:
             return data
 
         await self.send_message("configuration_changed", {
-            "configurations": list(map(apply_current_value, self.parameters))
+            "configurations": list(map(apply_current_value, self.parameters)),
+            "actions": self.actions
         }, to=to)
 
     async def _send_status(self, to: str = None) -> None:

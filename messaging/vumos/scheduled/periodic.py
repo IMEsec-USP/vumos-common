@@ -3,12 +3,25 @@ import asyncio
 from asyncio.events import AbstractEventLoop
 import threading
 from typing import Any, Callable, List
-from ..vumos import VumosService, VumosServiceStatus, VumosParameter
+from ..vumos import VumosAction, VumosService, VumosServiceStatus, VumosParameter
 
 
 class ScheduledVumosService(VumosService):
-    def __init__(self, name: str, description: str, conditions: Callable[[VumosService], Any], task: Callable[[VumosService, Any], None], parameters: List[VumosParameter] = [], nats_callback: Callable = None, pool_interval=3600) -> None:
-        super().__init__(name, description, parameters=parameters, nats_callback=nats_callback)
+    def __init__(self,
+                 name: str,
+                 description: str,
+                 conditions: Callable[[VumosService], Any],
+                 task: Callable[[VumosService, Any], None],
+                 parameters: List[VumosParameter] = [],
+                 actions: List[VumosAction] = [],
+                 nats_callback: Callable = None,
+                 pool_interval=3600) -> None:
+
+        super().__init__(name,
+                         description,
+                         parameters=parameters,
+                         actions=actions,
+                         nats_callback=nats_callback)
 
         self.conditions = conditions
         self.task = task
